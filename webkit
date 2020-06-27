@@ -1,0 +1,5 @@
+#!/bin/bash
+echo "--- ENTERING WEBKIT ENVIRONMENT ---"
+cd ~/work/webkit
+bash --rcfile <(cat ~/.bashrc ~/work/webkit/tools/env.sh)
+echo "--- EXITING WEBKIT ENVIRONMENT ---"
