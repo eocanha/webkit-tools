@@ -3,7 +3,7 @@
 PLATFORM=GTK
 BUILD=Release
 EXTRA_FLAGS='-D__OPTIMIZE__'
-EXTRA_INCLUDE=$W/WebKit/WebKit.config
+EXTRA_INCLUDE=$T/WebKit.config
 cat $W/WebKit/WebKitBuild/GTK/$BUILD/compile_commands.json \
  | sed -e 's#/app/webkit#'$W'/WebKit#g' \
        -e 's#WebKitBuild/'$BUILD'#WebKitBuild/'$PLATFORM'/'$BUILD'#g' \
