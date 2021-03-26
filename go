@@ -12,12 +12,14 @@
 
 if false
 then
- echo "Distributed build using icecc. See $0"
- OPT_MAKEARGS='--makeargs=-j30'
+ echo "Distributed build using sccache. See $0"
+ export WEBKIT_USE_SCCACHE=1
+ export NUMBER_OF_PROCESSORS=45
 else
  echo "Local build, NOT using icecc! See $0"
  unset CCACHE_PREFIX
- OPT_MAKEARGS='--makeargs=-j12'
+ export NUMBER_OF_PROCESSORS=$(cat /proc/cpuinfo | grep processor | wc | { read N _; echo $N; })
+ #OPT_MAKEARGS='--makeargs=-j12'
 fi
 
 while [ $# -gt 0 ]
