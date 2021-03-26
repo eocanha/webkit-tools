@@ -1,0 +1,3 @@
+imported/w3c/web-platform-tests/encrypted-media
+media/encrypted-media
+http/tests/media/encrypted-media

@@ -6,7 +6,7 @@ NEW_COMMIT=$2
 # --- Customizable options ----------------------------------------------------
 
 FULL_REBUILD=0 # Enable (1) with care!
-TESTS="${W}/tools/webkit-media-tests.txt" # If empty, all tests will be run
+TESTS="${W}/tools/webkit-media-source-tests.txt" # If empty, all tests will be run
 WEBKITDIR="${W}/WebKit"
 SKIP_TO=start
 
@@ -107,14 +107,27 @@ function run_test() {
 
   #CUSTOM_PARAMS="--run-singly"
   CUSTOM_PARAMS="--skipped=always"
-
-  cd "${WEBKITDIR}"
-  NUMBER_OF_PROCESSORS=12 \
-   Tools/Scripts/run-webkit-tests \
-   --gtk --no-new-test-results --no-show-results \
-   --fully-parallel --iterations=${ITERATIONS} ${CUSTOM_PARAMS} \
-   $(cat ${TESTS}) 2>&1 | tee /tmp/log-tests.txt
-
+  SLEEP=30
+  while true
+  do
+   set -x
+   cd "${WEBKITDIR}"
+   {
+    NUMBER_OF_PROCESSORS=40 \
+     Tools/Scripts/run-webkit-tests \
+     --gtk --no-new-test-results --no-show-results \
+     --fully-parallel --iterations=${ITERATIONS} ${CUSTOM_PARAMS} \
+     $(cat ${TESTS}) 2>&1
+    echo $? > /tmp/result.txt
+   } | tee /tmp/log-tests.txt
+   set +x
+   RESULT=$(cat /tmp/result.txt)
+   if [ "$RESULT" -eq 0 ]; then break; fi
+   echo "Result: $RESULT, settling, waiting $SLEEP sec and retrying..."
+   settle
+   sleep $SLEEP
+   SLEEP=$(($SLEEP*2))
+  done
   cd "${TESTDIR}/${VERSION}"
   cp ${W}/WebKit/WebKitBuild/GTK/Release/layout-test-results/results.html .
   cp /tmp/log-tests.txt "./${LOGFILE}"
@@ -202,19 +215,28 @@ function distill() {
   } > "${TESTDIR}/distilled-extra-summary.txt"
 }
 
+function settle {
+ echo "Killing processes to release used ports"
+ netstat -ltpn 2> /dev/null | grep python \
+  | { while read _ _ _ _ _ _ PID; do echo "$PID" | sed 's#/.*$##'; done; } \
+  | { while read PID; do kill $PID; kill -9 $PID; done; }
+ ipcs -m | grep '[^ ]* [^ ]* [^ ]* [^ ]* [^ ]* 0' | { while read _ ID _; do echo "Removing SHM $ID"; ipcrm -m $ID; done; }
+}
+
 # See: http://stackoverflow.com/a/31269848/752445
 function skip_to { eval "$(sed -n "/$1:/{:a;n;p;ba};" $0 | grep -v ':$')"; exit; }
 
-if [ "$#" != "2" -a "$1" != "--manual" -a "$1" != "--media" -a "$1" != "--media-source" ]; then
+if [ "$#" != "2" -a "$1" != "--manual" -a "$1" != "--media" -a "$1" != "--media-source" -a "$1" != "--eme" ]; then
   echo "Usage: ${SCRIPT_NAME} <baseline-commit> <new-commit>"
   echo "       ${SCRIPT_NAME} --manual [extra parameters] [test]"
   echo "       ${SCRIPT_NAME} --manual-file [file with tests]"
   echo "       ${SCRIPT_NAME} --media"
   echo "       ${SCRIPT_NAME} --media-source"
+  echo "       ${SCRIPT_NAME} --eme"
   exit 1
 fi
 
-if [ "$1" == "--manual" -o "$1" == "--manual-file" -o "$1" == "--media" -o "$1" == "--media-source" ]
+if [ "$1" == "--manual" -o "$1" == "--manual-file" -o "$1" == "--media" -o "$1" == "--media-source" -o "$1" == "--eme" ]
 then
   SKIP_TO=manual
   if [ "$1" == "--manual" ]
@@ -228,6 +250,9 @@ then
   elif [ "$1" == "--media-source" ]
   then
    TESTS=${W}/tools/webkit-media-source-tests.txt
+  elif [ "$1" == "--eme" ]
+  then
+   TESTS=${W}/tools/webkit-eme-tests.txt
   elif [ "$1" == "--manual-file" ]
   then
    TESTS="$2"
@@ -262,14 +287,24 @@ echo; echo "=== FIRST ROUND === TESTING BASELINE ==="; echo
 switch baseline ${BASELINE_COMMIT}
 build
 run_test baseline
+settle
 
 first-new:
 echo; echo "=== FIRST ROUND === TESTING NEW ==="; echo
 switch new ${NEW_COMMIT}
 build
 run_test new
+settle
 
 highlight_unexpected
+
+if [ "$(wc -l < ${TESTDIR}/unexpected.txt)" -eq 0 ]
+then
+ switch # Restore things
+ echo; echo "=== TESTING FINISHED ==="; echo
+ echo "There are no unexpected regressions in the first stage, no need for a second stage. \o/"
+ exit 0
+fi
 
 second:
 echo; echo "=== SECOND ROUND: with cached build and several repetitions of each unexpected test ==="; echo
@@ -279,6 +314,7 @@ echo; echo "=== SECOND ROUND === TESTING BASELINE ==="; echo
 TESTS="${TESTDIR}/unexpected.txt"
 switch baseline ${BASELINE_COMMIT}
 run_test baseline log-highlighted.txt 10
+settle
 
 second-new:
 echo; echo "=== SECOND ROUND === TESTING NEW ==="; echo
