@@ -19,7 +19,12 @@ fi
 if [ -z "$FLATPAK_ID" ]
  then
  echo "Entering flatpak shell..."
- sudo flatpak enter $(flatpak ps | grep org.webkit.Sdk | { read _ X _; echo $X; }) /bin/bash --rcfile /home/enrique/.bashrc -i -c $0 "$@"
+ FLATPAKID=""
+ while [ -z "${FLATPAKID}" -o "${FLATPAKID}" == "0" ]
+ do
+  FLATPAKID=$(flatpak ps | grep org.webkit.Sdk | { read _ X _; echo $X; })
+ done
+ sudo flatpak enter ${FLATPAKID} /bin/bash --rcfile /home/enrique/.bashrc -i -c $0 "$@"
  exit $?
 fi
 

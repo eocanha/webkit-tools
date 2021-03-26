@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export WEBKITDIR="${HOME}/WebKit"
+export WEBKITDIR="${W}/WebKit"
 export GST_DEBUG="webkitwebsrc:TRACE"
 
 # Create coredumps to be debugged with ~/debug.sh -c <corefile>
@@ -19,8 +19,9 @@ function showHelp() {
   echo "         debug-test.sh -m <options to pass to WebKitTestRunner>"
   echo "Example: debug-test.sh LayoutTests/media/video-set-rate-from-pause.html"
   echo "         debug-test.sh media/video-set-rate-from-pause.html"
-  echo "         # Tools/Scripts/run-webkit-httpd must be running for this to work:"
+  echo "         # Tools/Scripts/run-webkit-httpd must be running for these http tests to work:"
   echo "         debug-test.sh http://127.0.0.1:8000/media/hls/video-cookie.html"
+  echo "         debug-test.sh http://127.0.0.1:8000/media-resources/media-source/media-source-seek-detach-crash.html # Regular LayoutTests served by run-webkit-httpd"
   echo "         debug-test.sh -m -h"
   echo "         debug-test.sh -m --no-timeout --show-webview LayoutTests/media/video-set-rate-from-pause.html"
  } > /dev/stderr
@@ -56,6 +57,11 @@ export ENV=\
 
 cat > /tmp/test.sh << EOF
 #!/bin/bash
+
+#TEST_RUNNER_TEST_PLUGIN_PATH= WEB_PROCESS_CMD_PREFIX='/usr/bin/gdbserver localhost:8080' webkit-flatpak --debug --gtk -c /app/webkit/WebKitBuild/Debug/bin/WebKitTestRunner "-v" "LayoutTests/fast/forms/plaintext-mode-1.html"
+# TEST_RUNNER_INJECTED_BUNDLE_FILENAME=WebKitBuild/Release/lib/libTestRunnerInjectedBundle.so \
+# ./WebKitBuild/Release/bin/WebKitTestRunner "$@"
+
   if [[ "$MANUAL" == 1 ]]
   then
    GST_DEBUG_DUMP_DOT_DIR=/tmp \
@@ -63,21 +69,25 @@ cat > /tmp/test.sh << EOF
    GST_DEBUG=${GST_DEBUG} \
    WEBKIT_INSPECTOR_SERVER=0.0.0.0:9998 \
    TEST_RUNNER_TEST_PLUGIN_PATH= \
-   TEST_RUNNER_INJECTED_BUNDLE_FILENAME=WebKitBuild/Release/lib/libTestRunnerInjectedBundle.so \
-   ./WebKitBuild/Release/bin/WebKitTestRunner "$@"
+   WEB_PROCESS_CMD_PREFIX='/usr/bin/gdbserver localhost:8080' \
+   webkit-flatpak --gtk -c /app/webkit/WebKitBuild/Release/bin/WebKitTestRunner -v "$@"
   else
    GST_DEBUG_DUMP_DOT_DIR=/tmp \
    GST_DEBUG_NO_COLOR=1 \
    GST_DEBUG=${GST_DEBUG} \
    WEBKIT_INSPECTOR_SERVER=0.0.0.0:9998 \
    TEST_RUNNER_TEST_PLUGIN_PATH= \
-   TEST_RUNNER_INJECTED_BUNDLE_FILENAME=WebKitBuild/Release/lib/libTestRunnerInjectedBundle.so \
-   ./WebKitBuild/Release/bin/WebKitTestRunner -v --verbose --no-timeout --show-webview ${TESTNAME}
+   WEB_PROCESS_CMD_PREFIX='/usr/bin/gdbserver localhost:8080' \
+   webkit-flatpak --gtk -c /app/webkit/WebKitBuild/Release/bin/WebKitTestRunner -v --verbose --no-timeout --show-webview ${TESTNAME}
   fi
 EOF
 
 chmod 755 /tmp/test.sh
-cd ~/WebKit/
+cd ${WEBKITDIR}
+
+cat > /tmp/gdbinit << EOF
+target remote localhost:8080
+EOF
 
 # make sure the only dot files and append data dump files in /tmp are the new ones
 rm  /tmp/*.dot /tmp/append-*.mp4 2>/dev/null
@@ -113,6 +123,11 @@ ctrl_c() {
 # Prepare for ^C
 trap ctrl_c INT
 
-Tools/jhbuild/jhbuild-wrapper --gtk run /tmp/test.sh 2>&1 | tee /tmp/log.txt
+echo 'TODO: Run this in another terminal'
+echo 'webkit-flatpak --command=gdb /app/webkit/WebKitBuild/Release/bin/WebKitWebProcess'
+echo 'target remote localhost:8080'
+
+/tmp/test.sh 2>&1 | tee /tmp/log.txt # &
+
 
 ctrl_c
